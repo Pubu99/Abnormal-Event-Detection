@@ -6,6 +6,7 @@ from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 
 from src.config import *
 from src.data_loader import UCFDataset
@@ -31,7 +32,7 @@ def evaluate():
     y_true, y_pred = [], []
 
     with torch.no_grad():
-        for imgs, labels in loader:
+        for imgs, labels in tqdm(loader, desc="Evaluating"):
             imgs = imgs.to(device)
             outputs = model(imgs)
             _, preds = torch.max(outputs, 1)
@@ -49,4 +50,3 @@ def evaluate():
 
 if __name__ == "__main__":
     evaluate()
-
