@@ -7,6 +7,13 @@ from tqdm import tqdm
 import os
 import timm
 
+# ✅ GPU Check
+print("CUDA Available:", torch.cuda.is_available())
+if torch.cuda.is_available():
+    print("Using GPU:", torch.cuda.get_device_name(0))
+else:
+    print("Using CPU")
+
 from src.config import *
 from src.data_loader import UCFAugmentedDataset
 

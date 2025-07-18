@@ -1,9 +1,10 @@
 import os
+import torch
 
 DATA_DIR = "data/raw"
 MODEL_DIR = "models/classifiers"
 YOLO_MODEL = "yolov8n.pt"
-DEVICE = "cuda" if os.environ.get('CUDA_VISIBLE_DEVICES') else "cpu"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Multi-class classification (14 anomaly types + Normal)
 CLASSES = ['NormalVideos', 'Explosion', 'Fighting', 'Robbery', 'Shooting',
