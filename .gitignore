@@ -1,0 +1,86 @@
+# === Python & PyTorch ===
+__pycache__/
+*.py[cod]
+*.so
+*.ipynb_checkpoints
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# PyTorch & torchsave checkpoints
+*.pth
+*.pt
+
+# Logs and outputs
+*.log
+*.out
+*.err
+
+# Model folders
+models/
+checkpoints/
+
+# VSCode & IDE files
+.vscode/
+.idea/
+*.swp
+
+# Data files
+data/raw/
+data/processed/
+data/tmp/
+*.zip
+*.tar.gz
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+
+# Jupyter Notebook metadata
+.ipynb_checkpoints/
+
+# Streamlit cache
+.streamlit/
+
+# __ MACOSX when unzipping Kaggle datasets
+__MACOSX/
+
+# Python profiling
+profile_default/
+ipython_config.py
+
+# PyCharm project files
+*.iml
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+coverage.xml
+*.cover
+*.py,cover
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# test and temporary files
+tests/__pycache__/
+*.bak
+*.tmp
+
+# node (if using React frontend later)
+node_modules/
