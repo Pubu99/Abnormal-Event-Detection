@@ -9,3 +9,7 @@ matplotlib
 seaborn
 scikit-learn
 streamlit
+timm
+Pillow
+PyYAML
+

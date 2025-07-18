@@ -1,5 +1,3 @@
-# src/config.py
-
 import os
 
 DATA_DIR = "data/raw"
@@ -9,6 +7,7 @@ DEVICE = "cuda" if os.environ.get('CUDA_VISIBLE_DEVICES') else "cpu"
 
 # Binary classification
 CLASSES = ['NormalVideos', 'Anomaly']
+NUM_CLASSES = len(CLASSES)
 BINARY = True
 
 BATCH_SIZE = 64
