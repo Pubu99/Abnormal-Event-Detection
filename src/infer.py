@@ -46,10 +46,11 @@ def hybrid_infer(source=0):
         with torch.no_grad():
             outputs = resnet(img_tensor)
             _, pred = torch.max(outputs, 1)
-            anomaly_label = CLASSES[pred.item()]
+            is_anomaly = torch.sigmoid(outputs).item() > 0.5
 
         # Color logic: green for normal, red for anomaly
-        color = (0, 255, 0) if anomaly_label == "NormalVideos" else (0, 0, 255)
+        color = (0, 0, 255) if is_anomaly else (0, 255, 0)
+        anomaly_label = "Anomaly" if is_anomaly else "Normal"
 
         # Draw YOLO boxes and labels
         for (box, cls_id, conf) in zip(boxes, cls_ids, confs):

@@ -1,30 +1,33 @@
+# src/hybrid_infer.py
+
 from ultralytics import YOLO
 import torch
-import torchvision.models as models
+import timm
 import torchvision.transforms as transforms
 import cv2
-from src.config import *
 import numpy as np
+import os
 
-def hybrid_infer(source=0):  # source = 0 for webcam, or video path
+from src.config import *
+
+def hybrid_infer(source=0):
     device = torch.device(DEVICE)
 
     # Load YOLO
     yolo_model = YOLO(YOLO_MODEL)
 
-    # Load ResNet
-    resnet = models.resnet50(pretrained=False)
-    resnet.fc = torch.nn.Linear(resnet.fc.in_features, NUM_CLASSES)
-    resnet.load_state_dict(torch.load(f"{MODEL_DIR}/resnet50_epoch_{EPOCHS}.pth", map_location=device))
-    resnet.to(device)
-    resnet.eval()
+    # Load ConvNeXt Binary Classifier
+    model = timm.create_model(MODEL_NAME, pretrained=False, num_classes=1)
+    model.load_state_dict(torch.load(os.path.join(MODEL_DIR, f"{MODEL_NAME}_epoch_{EPOCHS}.pth"), map_location=device))
+    model.to(device)
+    model.eval()
 
     transform = transforms.Compose([
         transforms.ToPILImage(),
         transforms.Resize(IMAGE_SIZE),
         transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406],
-                             [0.229, 0.224, 0.225])
+        transforms.Normalize([0.5, 0.5, 0.5],
+                             [0.5, 0.5, 0.5])
     ])
 
     cap = cv2.VideoCapture(source)
@@ -40,21 +43,20 @@ def hybrid_infer(source=0):  # source = 0 for webcam, or video path
         cls_ids = results[0].boxes.cls.cpu().numpy().astype(int)
         confs = results[0].boxes.conf.cpu().numpy()
 
-        # ResNet classification
-        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img_tensor = transform(img).unsqueeze(0).to(device)
+        # Frame → Classifier
+        img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img_tensor = transform(img_rgb).unsqueeze(0).to(device)
+
         with torch.no_grad():
-            outputs = resnet(img_tensor)
-            _, pred = torch.max(outputs, 1)
-            anomaly_label = CLASSES[pred.item()]
+            output = model(img_tensor)
+            prob = torch.sigmoid(output).item()
+            is_anomaly = prob > 0.5
+            anomaly_label = "Anomaly" if is_anomaly else "Normal"
 
-        # Determine box color
-        if anomaly_label == "NormalVideos":
-            color = (0, 255, 0)  # green
-        else:
-            color = (0, 0, 255)  # red
+        # Choose box color
+        color = (0, 0, 255) if is_anomaly else (0, 255, 0)
 
-        # Draw boxes
+        # Draw YOLO boxes
         for (box, cls_id, conf) in zip(boxes, cls_ids, confs):
             x1, y1, x2, y2 = box
             cls_name = yolo_model.names[cls_id]
@@ -62,11 +64,11 @@ def hybrid_infer(source=0):  # source = 0 for webcam, or video path
             cv2.putText(frame, f"{cls_name} {conf:.2f}", (x1, y1 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-        # Show anomaly label on frame
-        cv2.putText(frame, f"Anomaly: {anomaly_label}", (10, 30),
+        # Draw anomaly label
+        cv2.putText(frame, f"Anomaly: {anomaly_label} ({prob:.2f})", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
 
-        cv2.imshow("YOLO + ResNet Abnormal Event Detection", frame)
+        cv2.imshow("YOLO + ConvNeXt Abnormal Detection", frame)
 
         if cv2.waitKey(1) == ord('q'):
             break
@@ -76,4 +78,3 @@ def hybrid_infer(source=0):  # source = 0 for webcam, or video path
 
 if __name__ == "__main__":
     hybrid_infer()
-
