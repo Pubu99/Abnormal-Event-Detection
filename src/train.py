@@ -1,5 +1,3 @@
-# src/train.py
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -10,7 +8,7 @@ import os
 import timm
 
 from src.config import *
-from src.data_loader import UCFBinaryDataset
+from src.data_loader import UCFAugmentedDataset
 
 def train():
     device = torch.device(DEVICE)
@@ -22,7 +20,7 @@ def train():
                              [0.5, 0.5, 0.5])
     ])
 
-    dataset = UCFBinaryDataset("data/processed", transform)
+    dataset = UCFAugmentedDataset("data/processed", transform)
     train_size = int(0.8 * len(dataset))
     val_size = len(dataset) - train_size
     train_ds, val_ds = random_split(dataset, [train_size, val_size])
@@ -30,10 +28,10 @@ def train():
     train_loader = DataLoader(train_ds, BATCH_SIZE, shuffle=True, num_workers=4)
     val_loader = DataLoader(val_ds, BATCH_SIZE, shuffle=False, num_workers=4)
 
-    model = timm.create_model(MODEL_NAME, pretrained=True, num_classes=1)
+    model = timm.create_model(MODEL_NAME, pretrained=True, num_classes=NUM_CLASSES)
     model = model.to(device)
 
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
     for epoch in range(EPOCHS):
@@ -43,7 +41,7 @@ def train():
 
         for imgs, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{EPOCHS}"):
             imgs = imgs.to(device)
-            labels = labels.float().unsqueeze(1).to(device)
+            labels = labels.to(device)
 
             optimizer.zero_grad()
             outputs = model(imgs)
@@ -51,8 +49,8 @@ def train():
             loss.backward()
             optimizer.step()
 
-            preds = (torch.sigmoid(outputs) > 0.5).int()
-            correct += (preds == labels.int()).sum().item()
+            preds = outputs.argmax(dim=1)
+            correct += (preds == labels).sum().item()
             total_loss += loss.item() * imgs.size(0)
 
         print(f"Train Loss: {total_loss/train_size:.4f} | Train Acc: {correct/train_size:.4f}")
@@ -64,11 +62,11 @@ def train():
         with torch.no_grad():
             for imgs, labels in val_loader:
                 imgs = imgs.to(device)
-                labels = labels.float().unsqueeze(1).to(device)
+                labels = labels.to(device)
                 outputs = model(imgs)
                 loss = criterion(outputs, labels)
-                preds = (torch.sigmoid(outputs) > 0.5).int()
-                val_correct += (preds == labels.int()).sum().item()
+                preds = outputs.argmax(dim=1)
+                val_correct += (preds == labels).sum().item()
                 val_loss += loss.item() * imgs.size(0)
 
         print(f"Val Loss: {val_loss/val_size:.4f} | Val Acc: {val_correct/val_size:.4f}")

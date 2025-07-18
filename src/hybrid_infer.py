@@ -1,5 +1,3 @@
-# src/hybrid_infer.py
-
 from ultralytics import YOLO
 import torch
 import timm
@@ -16,8 +14,8 @@ def hybrid_infer(source=0):
     # Load YOLO
     yolo_model = YOLO(YOLO_MODEL)
 
-    # Load ConvNeXt Binary Classifier
-    model = timm.create_model(MODEL_NAME, pretrained=False, num_classes=1)
+    # Load ConvNeXt Multi-Class Classifier
+    model = timm.create_model(MODEL_NAME, pretrained=False, num_classes=NUM_CLASSES)
     model.load_state_dict(torch.load(os.path.join(MODEL_DIR, f"{MODEL_NAME}_epoch_{EPOCHS}.pth"), map_location=device))
     model.to(device)
     model.eval()
@@ -49,11 +47,12 @@ def hybrid_infer(source=0):
 
         with torch.no_grad():
             output = model(img_tensor)
-            prob = torch.sigmoid(output).item()
-            is_anomaly = prob > 0.5
-            anomaly_label = "Anomaly" if is_anomaly else "Normal"
+            pred_idx = output.argmax(dim=1).item()
+            pred_class = CLASSES[pred_idx]
 
-        # Choose box color
+        # Determine anomaly or not
+        is_anomaly = pred_class != "NormalVideos"
+        label = f"Anomaly: {pred_class}" if is_anomaly else "Normal"
         color = (0, 0, 255) if is_anomaly else (0, 255, 0)
 
         # Draw YOLO boxes
@@ -64,8 +63,8 @@ def hybrid_infer(source=0):
             cv2.putText(frame, f"{cls_name} {conf:.2f}", (x1, y1 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-        # Draw anomaly label
-        cv2.putText(frame, f"Anomaly: {anomaly_label} ({prob:.2f})", (10, 30),
+        # Draw classifier label
+        cv2.putText(frame, label, (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
 
         cv2.imshow("YOLO + ConvNeXt Abnormal Detection", frame)
