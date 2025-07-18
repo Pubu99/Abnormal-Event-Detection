@@ -6,17 +6,17 @@ import cv2
 from src.config import *
 import numpy as np
 
-def hybrid_infer(source=0):
+def hybrid_infer(source=0):  # source = 0 for webcam, or video path
     device = torch.device(DEVICE)
 
-    # Load YOLO model
+    # Load YOLO
     yolo_model = YOLO(YOLO_MODEL)
 
-    # Load ResNet model
+    # Load ResNet
     resnet = models.resnet50(pretrained=False)
     resnet.fc = torch.nn.Linear(resnet.fc.in_features, NUM_CLASSES)
-    resnet.load_state_dict(torch.load(os.path.join(MODEL_DIR, f"resnet50_epoch_{EPOCHS}.pth"), map_location=device))
-    resnet = resnet.to(device)
+    resnet.load_state_dict(torch.load(f"{MODEL_DIR}/resnet50_epoch_{EPOCHS}.pth", map_location=device))
+    resnet.to(device)
     resnet.eval()
 
     transform = transforms.Compose([
@@ -40,7 +40,7 @@ def hybrid_infer(source=0):
         cls_ids = results[0].boxes.cls.cpu().numpy().astype(int)
         confs = results[0].boxes.conf.cpu().numpy()
 
-        # ResNet classification on full frame
+        # ResNet classification
         img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img_tensor = transform(img).unsqueeze(0).to(device)
         with torch.no_grad():
@@ -48,20 +48,23 @@ def hybrid_infer(source=0):
             _, pred = torch.max(outputs, 1)
             anomaly_label = CLASSES[pred.item()]
 
-        # Color logic: green for normal, red for anomaly
-        color = (0, 255, 0) if anomaly_label == "NormalVideos" else (0, 0, 255)
+        # Determine box color
+        if anomaly_label == "NormalVideos":
+            color = (0, 255, 0)  # green
+        else:
+            color = (0, 0, 255)  # red
 
-        # Draw YOLO boxes and labels
+        # Draw boxes
         for (box, cls_id, conf) in zip(boxes, cls_ids, confs):
             x1, y1, x2, y2 = box
             cls_name = yolo_model.names[cls_id]
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             cv2.putText(frame, f"{cls_name} {conf:.2f}", (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-        # Put anomaly label on frame
+        # Show anomaly label on frame
         cv2.putText(frame, f"Anomaly: {anomaly_label}", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, color, 3)
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
 
         cv2.imshow("YOLO + ResNet Abnormal Event Detection", frame)
 
