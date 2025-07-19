@@ -1,41 +1,43 @@
 import streamlit as st
 from ultralytics import YOLO
 import torch
-import torchvision.models as models
+import timm
 import torchvision.transforms as transforms
 import cv2
 import tempfile
 import numpy as np
 import os
+import time
 
 from src.config import *
 
 st.set_page_config(page_title="Abnormal Event Detection", layout="wide")
-st.title("🚨 Abnormal Event Detection (YOLO + ResNet)")
+st.title("🚨 Abnormal Event Detection (YOLO + ConvNeXt)")
 
 # Upload video or use webcam checkbox
 uploaded_file = st.file_uploader("Upload a video file", type=["mp4", "avi", "mov"])
 use_webcam = st.checkbox("Use Webcam")
 
 if uploaded_file or use_webcam:
-    # Load YOLO model (lightweight by default)
-    yolo_model = YOLO(YOLO_MODEL)
-
-    # Load ResNet classifier
     device = torch.device(DEVICE)
-    resnet = models.resnet50(pretrained=False)
-    resnet.fc = torch.nn.Linear(resnet.fc.in_features, NUM_CLASSES)
-    model_path = os.path.join(MODEL_DIR, f"resnet50_epoch_{EPOCHS}.pth")
-    resnet.load_state_dict(torch.load(model_path, map_location=device))
-    resnet.to(device)
-    resnet.eval()
+
+    # Load YOLO model
+    yolo_model = YOLO(YOLO_MODEL)
+    yolo_model.to(device)
+
+    # Load ConvNeXt multi-class classifier
+    model = timm.create_model(MODEL_NAME, pretrained=False, num_classes=NUM_CLASSES)
+    model_path = os.path.join(MODEL_DIR, f"{MODEL_NAME}_epoch_{EPOCHS}.pth")
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.to(device)
+    model.eval()
 
     transform = transforms.Compose([
         transforms.ToPILImage(),
         transforms.Resize(IMAGE_SIZE),
         transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406],
-                             [0.229, 0.224, 0.225])
+        transforms.Normalize([0.5, 0.5, 0.5],
+                             [0.5, 0.5, 0.5])
     ])
 
     # Setup video capture
@@ -48,9 +50,7 @@ if uploaded_file or use_webcam:
 
     stframe = st.empty()
     fps_text = st.empty()
-
     frame_count = 0
-    import time
     start_time = time.time()
 
     while cap.isOpened():
@@ -59,24 +59,24 @@ if uploaded_file or use_webcam:
             break
 
         # YOLO detection
-        results = yolo_model(frame, verbose=False)
+        results = yolo_model(frame, device=device.index if device.type == 'cuda' else -1, verbose=False)
         boxes = results[0].boxes.xyxy.cpu().numpy().astype(int)
         cls_ids = results[0].boxes.cls.cpu().numpy().astype(int)
         confs = results[0].boxes.conf.cpu().numpy()
 
-        # ResNet classification on full frame
+        # Classifier inference on full frame
         img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img_tensor = transform(img_rgb).unsqueeze(0).to(device)
+
         with torch.no_grad():
-            outputs = resnet(img_tensor)
-            _, pred = torch.max(outputs, 1)
-            is_anomaly = torch.sigmoid(outputs).item() > 0.5
+            outputs = model(img_tensor)
+            pred_idx = torch.argmax(outputs, dim=1).item()
+            anomaly_label = CLASSES[pred_idx]
+            is_anomaly = anomaly_label != "NormalVideos"
 
-        # Color logic: green for normal, red for anomaly
         color = (0, 0, 255) if is_anomaly else (0, 255, 0)
-        anomaly_label = "Anomaly" if is_anomaly else "Normal"
 
-        # Draw bounding boxes and labels
+        # Draw YOLO bounding boxes
         for (box, cls_id, conf) in zip(boxes, cls_ids, confs):
             x1, y1, x2, y2 = box
             cls_name = yolo_model.names[cls_id]
@@ -84,11 +84,12 @@ if uploaded_file or use_webcam:
             cv2.putText(frame, f"{cls_name} {conf:.2f}", (x1, y1 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
-        # Display anomaly label on frame
-        cv2.putText(frame, f"Anomaly: {anomaly_label}", (10, 40),
+        # Show anomaly label on frame
+        display_text = "Normal" if not is_anomaly else f"Anomaly: {anomaly_label}"
+        cv2.putText(frame, display_text, (10, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 3)
 
-        # Show frame in streamlit
+        # Show frame in Streamlit
         stframe.image(frame, channels="BGR")
 
         frame_count += 1
@@ -97,5 +98,6 @@ if uploaded_file or use_webcam:
         fps_text.text(f"FPS: {fps:.2f}")
 
     cap.release()
+
 else:
     st.info("Upload a video file or select 'Use Webcam' to start detection.")

@@ -21,7 +21,8 @@ def evaluate():
                              [0.5, 0.5, 0.5])
     ])
 
-    dataset = UCFAugmentedDataset("data/processed", transform)
+    # ✅ Use only test dataset here
+    dataset = UCFAugmentedDataset("data/raw/Test", transform)
     loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
 
     model = timm.create_model(MODEL_NAME, pretrained=False, num_classes=NUM_CLASSES)

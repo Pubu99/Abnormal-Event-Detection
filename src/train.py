@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
 import os
@@ -27,13 +27,12 @@ def train():
                              [0.5, 0.5, 0.5])
     ])
 
-    dataset = UCFAugmentedDataset("data/processed", transform)
-    train_size = int(0.8 * len(dataset))
-    val_size = len(dataset) - train_size
-    train_ds, val_ds = random_split(dataset, [train_size, val_size])
+    # ✅ Load from your raw/train and raw/test folders
+    train_ds = UCFAugmentedDataset("data/raw/Train", transform)
+    val_ds   = UCFAugmentedDataset("data/raw/Test", transform)
 
     train_loader = DataLoader(train_ds, BATCH_SIZE, shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_ds, BATCH_SIZE, shuffle=False, num_workers=4)
+    val_loader   = DataLoader(val_ds, BATCH_SIZE, shuffle=False, num_workers=4)
 
     model = timm.create_model(MODEL_NAME, pretrained=True, num_classes=NUM_CLASSES)
     model = model.to(device)
@@ -60,9 +59,9 @@ def train():
             correct += (preds == labels).sum().item()
             total_loss += loss.item() * imgs.size(0)
 
-        print(f"Train Loss: {total_loss/train_size:.4f} | Train Acc: {correct/train_size:.4f}")
+        print(f"Train Loss: {total_loss/len(train_ds):.4f} | Train Acc: {correct/len(train_ds):.4f}")
 
-        # Validation
+        # ✅ Validation
         model.eval()
         val_loss = 0
         val_correct = 0
@@ -76,7 +75,7 @@ def train():
                 val_correct += (preds == labels).sum().item()
                 val_loss += loss.item() * imgs.size(0)
 
-        print(f"Val Loss: {val_loss/val_size:.4f} | Val Acc: {val_correct/val_size:.4f}")
+        print(f"Val Loss: {val_loss/len(val_ds):.4f} | Val Acc: {val_correct/len(val_ds):.4f}")
 
         os.makedirs(MODEL_DIR, exist_ok=True)
         torch.save(model.state_dict(), os.path.join(MODEL_DIR, f"{MODEL_NAME}_epoch_{epoch+1}.pth"))
