@@ -7,32 +7,29 @@ from tqdm import tqdm
 import os
 import timm
 
-# ✅ GPU Check
-print("CUDA Available:", torch.cuda.is_available())
-if torch.cuda.is_available():
-    print("Using GPU:", torch.cuda.get_device_name(0))
-else:
-    print("Using CPU")
-
 from src.config import *
 from src.data_loader import UCFAugmentedDataset
 
 def train():
+    print("CUDA Available:", torch.cuda.is_available())
+    if DEVICE == "cuda":
+        print("🚀 Training on GPU:", torch.cuda.get_device_name(0))
+    else:
+        print("🧠 Training on CPU")
+
     device = torch.device(DEVICE)
 
     transform = transforms.Compose([
         transforms.Resize(IMAGE_SIZE),
         transforms.ToTensor(),
-        transforms.Normalize([0.5, 0.5, 0.5],
-                             [0.5, 0.5, 0.5])
+        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
     ])
 
-    # ✅ Load from your raw/train and raw/test folders
-    train_ds = UCFAugmentedDataset("data/raw/Train", transform)
-    val_ds   = UCFAugmentedDataset("data/raw/Test", transform)
+    train_ds = UCFAugmentedDataset(os.path.join(DATA_DIR, "Train"), transform)
+    val_ds = UCFAugmentedDataset(os.path.join(DATA_DIR, "Test"), transform)
 
-    train_loader = DataLoader(train_ds, BATCH_SIZE, shuffle=True, num_workers=4)
-    val_loader   = DataLoader(val_ds, BATCH_SIZE, shuffle=False, num_workers=4)
+    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
+    val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
 
     model = timm.create_model(MODEL_NAME, pretrained=True, num_classes=NUM_CLASSES)
     model = model.to(device)
@@ -40,15 +37,16 @@ def train():
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
+    os.makedirs(MODEL_DIR, exist_ok=True)
+
     for epoch in range(EPOCHS):
         model.train()
         total_loss = 0
         correct = 0
 
-        for imgs, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{EPOCHS}"):
-            imgs = imgs.to(device)
-            labels = labels.to(device)
-
+        print(f"\n🔁 Epoch {epoch + 1}/{EPOCHS}")
+        for imgs, labels in tqdm(train_loader, desc="🧪 Training"):
+            imgs, labels = imgs.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(imgs)
             loss = criterion(outputs, labels)
@@ -59,26 +57,31 @@ def train():
             correct += (preds == labels).sum().item()
             total_loss += loss.item() * imgs.size(0)
 
-        print(f"Train Loss: {total_loss/len(train_ds):.4f} | Train Acc: {correct/len(train_ds):.4f}")
+        train_loss = total_loss / len(train_ds)
+        train_acc = correct / len(train_ds)
+        print(f"✅ Train Loss: {train_loss:.4f} | Train Accuracy: {train_acc:.4f}")
 
-        # ✅ Validation
+        # Evaluation
         model.eval()
         val_loss = 0
         val_correct = 0
         with torch.no_grad():
             for imgs, labels in val_loader:
-                imgs = imgs.to(device)
-                labels = labels.to(device)
+                imgs, labels = imgs.to(device), labels.to(device)
                 outputs = model(imgs)
                 loss = criterion(outputs, labels)
                 preds = outputs.argmax(dim=1)
                 val_correct += (preds == labels).sum().item()
                 val_loss += loss.item() * imgs.size(0)
 
-        print(f"Val Loss: {val_loss/len(val_ds):.4f} | Val Acc: {val_correct/len(val_ds):.4f}")
+        val_loss /= len(val_ds)
+        val_acc = val_correct / len(val_ds)
+        print(f"📊 Val Loss: {val_loss:.4f} | Val Accuracy: {val_acc:.4f}")
 
-        os.makedirs(MODEL_DIR, exist_ok=True)
-        torch.save(model.state_dict(), os.path.join(MODEL_DIR, f"{MODEL_NAME}_epoch_{epoch+1}.pth"))
+        # Save model
+        model_path = os.path.join(MODEL_DIR, f"{MODEL_NAME}_epoch_{epoch+1}.pth")
+        torch.save(model.state_dict(), model_path)
+        print(f"💾 Model saved: {model_path}")
 
 if __name__ == "__main__":
     train()

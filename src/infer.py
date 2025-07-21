@@ -81,7 +81,14 @@ def hybrid_infer(source=0, window_size=10, anomaly_threshold=0.5):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
         # Draw aggregated anomaly label
-        display_text = "Normal" if not is_anomaly else f"Anomaly: {anomaly_label}"
+        conf_score = torch.softmax(output, dim=1)[0][majority_pred].item()
+        if not is_anomaly:
+            display_text = "Normal"
+        elif conf_score < 0.5:
+            display_text = "Abnormal"
+        else:
+             display_text = f"Abnormal: {anomaly_label}"
+
         cv2.putText(frame, display_text, (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
 
