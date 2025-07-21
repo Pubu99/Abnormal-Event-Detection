@@ -9,7 +9,7 @@ YOLO_MODEL = "yolov8n.pt"
 # Hardware
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Class labels (make sure these exactly match your dataset folders)
+# Class labels (must exactly match dataset folders)
 CLASSES = [
     "NormalVideos", "Abuse", "Arrest", "Arson", "Assault", "Burglary",
     "Explosion", "Fighting", "RoadAccidents", "Robbery", "Shooting",
@@ -17,7 +17,7 @@ CLASSES = [
 ]
 NUM_CLASSES = len(CLASSES)
 
-# Training configuration
+# Training config
 BATCH_SIZE = 64
 LEARNING_RATE = 1e-4
 EPOCHS = 10
@@ -25,3 +25,6 @@ IMAGE_SIZE = (224, 224)
 
 # Model backbone
 MODEL_NAME = "convnext_tiny.fb_in22k"
+
+# Label smoothing factor (for training)
+LABEL_SMOOTHING = 0.1

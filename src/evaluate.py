@@ -14,17 +14,22 @@ from src.data_loader import UCFAugmentedDataset
 
 def find_best_model(model_dir):
     """
-    Automatically find the best epoch based on model filename like '..._epoch_#.pth'
+    Find the model file with 'best' in its name or the last epoch checkpoint
     """
-    weights = [f for f in os.listdir(model_dir) if f.endswith('.pth') and '_epoch_' in f]
-    if not weights:
-        raise FileNotFoundError("❌ No .pth model files found in model directory.")
-
-    # Sort by epoch number
-    weights = sorted(weights, key=lambda x: int(x.split('_epoch_')[-1].split('.')[0]))
-    best_model_path = os.path.join(model_dir, weights[-1])  # Last epoch (or pick best manually)
-    print(f"🔍 Using Model: {weights[-1]}")
-    return best_model_path
+    best_models = [f for f in os.listdir(model_dir) if f.endswith('.pth') and 'best' in f]
+    if best_models:
+        best_model_path = os.path.join(model_dir, best_models[0])
+        print(f"🔍 Using best model: {best_models[0]}")
+        return best_model_path
+    else:
+        # fallback: use last epoch
+        weights = [f for f in os.listdir(model_dir) if f.endswith('.pth') and '_epoch_' in f]
+        if not weights:
+            raise FileNotFoundError("❌ No .pth model files found in model directory.")
+        weights = sorted(weights, key=lambda x: int(x.split('_epoch_')[-1].split('.')[0]))
+        best_model_path = os.path.join(model_dir, weights[-1])
+        print(f"🔍 Using last epoch model: {weights[-1]}")
+        return best_model_path
 
 def evaluate():
     device = torch.device(DEVICE)
@@ -36,18 +41,15 @@ def evaluate():
         transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
     ])
 
-    # Load Test Dataset
     dataset = UCFAugmentedDataset(os.path.join(DATA_DIR, "Test"), transform)
     loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
 
-    # Load Model
     model = timm.create_model(MODEL_NAME, pretrained=False, num_classes=NUM_CLASSES)
     model_path = find_best_model(MODEL_DIR)
     model.load_state_dict(torch.load(model_path, map_location=device))
-    model = model.to(device)
+    model.to(device)
     model.eval()
 
-    # Evaluation
     y_true, y_pred = [], []
 
     with torch.no_grad():
@@ -61,11 +63,9 @@ def evaluate():
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
 
-    # Filter only used classes
     unique_labels = np.unique(np.concatenate([y_true, y_pred]))
     used_classes = [CLASSES[i] for i in unique_labels]
 
-    # 🔷 Confusion Matrix
     cm = confusion_matrix(y_true, y_pred, labels=unique_labels)
     acc = accuracy_score(y_true, y_pred)
 
@@ -80,7 +80,6 @@ def evaluate():
     print("✅ Confusion matrix saved: reports/confusion_matrix.png")
     plt.show()
 
-    # 🔷 Classification Report
     report = classification_report(
         y_true, y_pred,
         labels=unique_labels,

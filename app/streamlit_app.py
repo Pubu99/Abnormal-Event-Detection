@@ -14,20 +14,17 @@ from src.config import *
 st.set_page_config(page_title="Abnormal Event Detection", layout="wide")
 st.title("🚨 Abnormal Event Detection (YOLO + ConvNeXt)")
 
-# Upload video or use webcam checkbox
 uploaded_file = st.file_uploader("Upload a video file", type=["mp4", "avi", "mov"])
 use_webcam = st.checkbox("Use Webcam")
 
 if uploaded_file or use_webcam:
     device = torch.device(DEVICE)
 
-    # Load YOLO model
     yolo_model = YOLO(YOLO_MODEL)
     yolo_model.to(device)
 
-    # Load ConvNeXt multi-class classifier
     model = timm.create_model(MODEL_NAME, pretrained=False, num_classes=NUM_CLASSES)
-    model_path = os.path.join(MODEL_DIR, f"{MODEL_NAME}_epoch_{EPOCHS}.pth")
+    model_path = os.path.join(MODEL_DIR, f"{MODEL_NAME}_best.pth")
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.to(device)
     model.eval()
@@ -40,7 +37,6 @@ if uploaded_file or use_webcam:
                              [0.5, 0.5, 0.5])
     ])
 
-    # Setup video capture
     if use_webcam:
         cap = cv2.VideoCapture(0)
     else:
@@ -58,13 +54,12 @@ if uploaded_file or use_webcam:
         if not ret:
             break
 
-        # YOLO detection
-        results = yolo_model(frame, device=device.index if device.type == 'cuda' else -1, verbose=False)
+        yolo_device_index = device.index if device.type == 'cuda' else -1
+        results = yolo_model(frame, device=yolo_device_index, verbose=False)
         boxes = results[0].boxes.xyxy.cpu().numpy().astype(int)
         cls_ids = results[0].boxes.cls.cpu().numpy().astype(int)
         confs = results[0].boxes.conf.cpu().numpy()
 
-        # Classifier inference on full frame
         img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img_tensor = transform(img_rgb).unsqueeze(0).to(device)
 
@@ -76,7 +71,6 @@ if uploaded_file or use_webcam:
 
         color = (0, 0, 255) if is_anomaly else (0, 255, 0)
 
-        # Draw YOLO bounding boxes
         for (box, cls_id, conf) in zip(boxes, cls_ids, confs):
             x1, y1, x2, y2 = box
             cls_name = yolo_model.names[cls_id]
@@ -84,12 +78,10 @@ if uploaded_file or use_webcam:
             cv2.putText(frame, f"{cls_name} {conf:.2f}", (x1, y1 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
-        # Show anomaly label on frame
         display_text = "Normal" if not is_anomaly else f"Anomaly: {anomaly_label}"
         cv2.putText(frame, display_text, (10, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 3)
 
-        # Show frame in Streamlit
         stframe.image(frame, channels="BGR")
 
         frame_count += 1
