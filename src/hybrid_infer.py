@@ -12,11 +12,11 @@ from src.config import *
 def hybrid_infer(source=0):
     device = torch.device(DEVICE)
 
-    # Load YOLO and move to GPU
+    # Load YOLO
     yolo_model = YOLO(YOLO_MODEL)
     yolo_model.to(device)
 
-    # Load ConvNeXt classifier (multi-class)
+    # Load ConvNeXt classifier
     model = timm.create_model(MODEL_NAME, pretrained=False, num_classes=len(CLASSES))
     model.load_state_dict(torch.load(os.path.join(MODEL_DIR, f"{MODEL_NAME}_epoch_{EPOCHS}.pth"), map_location=device))
     model.to(device)
@@ -39,13 +39,13 @@ def hybrid_infer(source=0):
         if not ret:
             break
 
-        # YOLO object detection
+        # YOLO detection
         results = yolo_model(frame, device=0, verbose=False)
         boxes = results[0].boxes.xyxy.cpu().numpy().astype(int)
         cls_ids = results[0].boxes.cls.cpu().numpy().astype(int)
         confs = results[0].boxes.conf.cpu().numpy()
 
-        # Frame → Classifier (multi-class)
+        # Classification
         img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img_tensor = transform(img_rgb).unsqueeze(0).to(device)
 
@@ -54,8 +54,19 @@ def hybrid_infer(source=0):
             pred_idx = torch.argmax(output, dim=1).item()
             anomaly_label = CLASSES[pred_idx]
 
-        # Choose color
+        # Determine confidence
+        probabilities = torch.softmax(output, dim=1)[0]
+        conf_score = probabilities[pred_idx].item()
         is_anomaly = anomaly_label != 'NormalVideos'
+
+        # Decide display text
+        if not is_anomaly:
+            display_text = "Normal"
+        elif conf_score < 0.5:
+            display_text = "Abnormal"
+        else:
+            display_text = f"Abnormal: {anomaly_label}"
+
         color = (0, 0, 255) if is_anomaly else (0, 255, 0)
 
         # Draw YOLO boxes
@@ -66,24 +77,16 @@ def hybrid_infer(source=0):
             cv2.putText(frame, f"{cls_name} {conf:.2f}", (x1, y1 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-        # Draw anomaly classification result
-        conf_score = torch.softmax(output, dim=1)[0][majority_pred].item()
-        if not is_anomaly:
-            display_text = "Normal"
-        elif conf_score < 0.5:
-            display_text = "Abnormal"
-        else:
-             display_text = f"Abnormal: {anomaly_label}"
+        # Draw classification text
         cv2.putText(frame, display_text, (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
 
-        # FPS Calculation
+        # FPS
         fps = 1.0 / (time.time() - start_time)
         cv2.putText(frame, f"FPS: {fps:.2f}", (10, 70),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
 
         cv2.imshow("YOLO + ConvNeXt Anomaly Detection", frame)
-
         if cv2.waitKey(1) == ord('q'):
             break
 
